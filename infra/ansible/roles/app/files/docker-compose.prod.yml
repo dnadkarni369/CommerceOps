@@ -1,0 +1,67 @@
+# Production compose file deployed to EC2 by Ansible. Points at ECR images
+# (built by Jenkins) instead of local `build:` contexts, and drops dev-only
+# conveniences like exposed DB ports.
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    networks: [commerceops-net]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    networks: [commerceops-net]
+
+  auth-service:
+    image: ${ECR_REGISTRY}/commerceops/auth-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks: [commerceops-net]
+
+  order-service:
+    image: ${ECR_REGISTRY}/commerceops/order-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks: [commerceops-net]
+
+  ai-recommendation-service:
+    image: ${ECR_REGISTRY}/commerceops/ai-recommendation-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks: [commerceops-net]
+
+  worker-service:
+    image: ${ECR_REGISTRY}/commerceops/worker-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks: [commerceops-net]
+
+  api-service:
+    image: ${ECR_REGISTRY}/commerceops/api-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks: [commerceops-net]
+
+  frontend:
+    image: ${ECR_REGISTRY}/commerceops/frontend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    networks: [commerceops-net]
+
+  nginx:
+    image: nginx:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [commerceops-net]
+
+networks:
+  commerceops-net:
+    driver: bridge

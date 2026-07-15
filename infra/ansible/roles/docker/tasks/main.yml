@@ -1,0 +1,48 @@
+---
+# Idempotent Docker + Compose plugin install. Terraform's launch template
+# user-data already does a minimal version of this on first boot; this role
+# exists so the same playbook can be re-run against already-running
+# instances (e.g. after an AMI change or manual instance) without relying on
+# user-data having executed.
+
+- name: Update package cache
+  dnf:
+    update_cache: true
+
+- name: Install Docker and Python3
+  dnf:
+    name:
+      - docker
+      - python3-pip
+    state: present
+
+- name: Ensure Docker service is enabled and running
+  systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Add ec2-user to docker group
+  user:
+    name: ec2-user
+    groups: docker
+    append: true
+
+- name: Check if docker compose plugin is already installed
+  stat:
+    path: /usr/local/lib/docker/cli-plugins/docker-compose
+  register: compose_plugin
+
+- name: Create cli-plugins directory
+  file:
+    path: /usr/local/lib/docker/cli-plugins
+    state: directory
+    mode: '0755'
+  when: not compose_plugin.stat.exists
+
+- name: Download Docker Compose plugin
+  get_url:
+    url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+    dest: /usr/local/lib/docker/cli-plugins/docker-compose
+    mode: '0755'
+  when: not compose_plugin.stat.exists

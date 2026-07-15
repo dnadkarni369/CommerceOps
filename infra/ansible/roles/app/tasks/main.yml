@@ -1,0 +1,43 @@
+---
+# Deploys the CommerceOps stack to an app server by pulling pre-built images
+# from ECR (built by Jenkins) and starting them with docker compose. This
+# role assumes images have already been pushed - it does NOT build locally
+# on the target instance, keeping app servers lightweight.
+
+- name: Create app directory
+  file:
+    path: "{{ app_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy production docker-compose file
+  copy:
+    src: files/docker-compose.prod.yml
+    dest: "{{ app_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Template environment file from Terraform/Vault-provided variables
+  template:
+    src: templates/env.j2
+    dest: "{{ app_dir }}/.env"
+    mode: '0600'
+
+- name: Log in to ECR
+  shell: |
+    aws ecr get-login-password --region {{ aws_region | default('ap-south-1') }} \
+      | docker login --username AWS --password-stdin {{ ecr_registry }}
+  changed_when: false
+
+- name: Pull latest images
+  command: docker compose -f {{ app_dir }}/docker-compose.yml pull
+  args:
+    chdir: "{{ app_dir }}"
+
+- name: Start / update the stack
+  command: docker compose -f {{ app_dir }}/docker-compose.yml up -d --remove-orphans
+  args:
+    chdir: "{{ app_dir }}"
+
+- name: Prune unused images to save disk space (free-tier instances have small volumes)
+  command: docker image prune -af --filter "until=72h"
+  changed_when: false

@@ -1,0 +1,11 @@
+---
+- name: Configure CommerceOps app servers
+  hosts: app_servers
+  become: true
+  vars:
+    app_dir: /opt/commerceops
+    ecr_registry: "REPLACE_WITH_ACCOUNT_ID.dkr.ecr.REPLACE_WITH_REGION.amazonaws.com"
+
+  roles:
+    - docker
+    - app

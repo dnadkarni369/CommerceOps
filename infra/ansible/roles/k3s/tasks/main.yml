@@ -1,0 +1,44 @@
+---
+# Installs a single-node k3s cluster on the EC2 instance provisioned by
+# Terraform, and fetches the kubeconfig back to the Jenkins/control host so
+# `kubectl` can be run remotely against it. Idempotent - safe to re-run.
+
+- name: Check if k3s is already installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install k3s (server/control-plane)
+  shell: |
+    curl -sfL https://get.k3s.io | \
+      INSTALL_K3S_EXEC="--write-kubeconfig-mode 644 --tls-san {{ ansible_host }}" sh -
+  when: not k3s_binary.stat.exists
+
+- name: Wait for k3s node to be Ready
+  command: /usr/local/bin/k3s kubectl get nodes
+  register: node_status
+  until: "'Ready' in node_status.stdout"
+  retries: 12
+  delay: 10
+  changed_when: false
+
+- name: Read the generated kubeconfig
+  slurp:
+    src: /etc/rancher/k3s/k3s.yaml
+  register: kubeconfig_raw
+
+- name: Write a local kubeconfig pointing at this node's public IP
+  copy:
+    content: "{{ kubeconfig_raw.content | b64decode | regex_replace('127.0.0.1', ansible_host) }}"
+    dest: "{{ local_kubeconfig_path | default('/tmp/commerceops-kubeconfig') }}"
+  delegate_to: localhost
+  become: false
+
+- name: Create commerceops namespace
+  command: /usr/local/bin/k3s kubectl create namespace commerceops --dry-run=client -o yaml
+  register: ns_yaml
+  changed_when: false
+
+- name: Apply commerceops namespace
+  shell: "echo '{{ ns_yaml.stdout }}' | /usr/local/bin/k3s kubectl apply -f -"
+  changed_when: false

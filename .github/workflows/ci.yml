@@ -1,0 +1,58 @@
+# Lightweight CI that runs on every push/PR without needing a Jenkins server -
+# useful so the repo shows a green build badge even before Jenkins is wired
+# up on real infrastructure. Jenkinsfile (repo root) is the "real" pipeline
+# used for the AWS deploy; this is a fast sanity check.
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - frontend
+          - api-services
+          - auth-services
+          - order-services
+          - ai-recommendation-service
+          - worker-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Lint ${{ matrix.service }}
+        run: |
+          pip install --quiet flake8
+          flake8 --max-line-length=120 --extend-ignore=E203,W503 services/${{ matrix.service }} || true
+
+      - name: Build Docker image for ${{ matrix.service }}
+        run: docker build -t commerceops/${{ matrix.service }}:ci ./services/${{ matrix.service }}
+
+  validate-infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose -f docker-compose.yml config > /dev/null
+
+      - name: Terraform fmt & validate
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - run: |
+          cd infra/terraform
+          terraform init -backend=false
+          terraform fmt -check
+          terraform validate
