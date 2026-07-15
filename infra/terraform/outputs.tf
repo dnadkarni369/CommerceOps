@@ -23,3 +23,7 @@ output "sns_topic_arn" {
 output "lambda_function_name" {
   value = aws_lambda_function.order_notification.function_name
 }
+
+output "app_instance_public_ip" {
+  value = aws_instance.k3s_node.public_ip
+}
