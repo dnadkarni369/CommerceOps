@@ -60,7 +60,7 @@ resource "aws_instance" "k3s_node" {
   vpc_security_group_ids = [aws_security_group.k3s.id]
 
   root_block_device {
-    volume_size = 20 # stays within the 30GB free-tier EBS allowance
+    volume_size = 30 # stays within the 30GB free-tier EBS allowance
     volume_type = "gp3"
   }
 
